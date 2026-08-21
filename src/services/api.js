@@ -18,6 +18,114 @@ const apiClient = axios.create({
   timeout: 15000,
 });
 
+const toProjectRequest = (project) => ({
+  project_name: project.name,
+  description: project.description,
+  technology_stack: Array.isArray(project.techStack)
+    ? project.techStack.join(", ")
+    : project.techStack,
+});
+
+const toProject = (project) => ({
+  id: project.project_id,
+  name: project.project_name,
+  description: project.description,
+  techStack: project.technology_stack
+    ? project.technology_stack.split(",").map((item) => item.trim()).filter(Boolean)
+    : [],
+  createdAt: project.created_at,
+});
+
+const toTaskRequest = (task) => ({
+  project_id: Number(task.projectId),
+  title: task.title,
+  description: task.description,
+  priority: task.priority,
+  status: task.status,
+  ai_generated: task.aiGenerated,
+});
+
+const toTask = (task) => ({
+  id: task.task_id,
+  projectId: task.project_id,
+  title: task.title,
+  description: task.description,
+  priority: task.priority,
+  status: task.status,
+  aiGenerated: task.ai_generated,
+  createdAt: task.created_at,
+  updatedAt: task.updated_at || task.created_at,
+});
+
+const parseAIResponse = (answer) => {
+  const sections = {
+    requirementUnderstanding: "",
+    frontendTasks: [],
+    backendTasks: [],
+    databaseTasks: [],
+    testingSteps: [],
+    possibleBlockers: [],
+    recommendedNextAction: "",
+  };
+  const sectionMap = {
+    "Requirement Understanding": "requirementUnderstanding",
+    "Frontend Tasks": "frontendTasks",
+    "Backend Tasks": "backendTasks",
+    "Database Tasks": "databaseTasks",
+    "Testing Steps": "testingSteps",
+    "Possible Blockers": "possibleBlockers",
+    "Recommended Next Action": "recommendedNextAction",
+  };
+  let currentKey = null;
+
+  String(answer || "").split("\n").forEach((line) => {
+    const heading = line.replace(/^\s*\d+\.\s*/, "").trim();
+    const nextKey = sectionMap[heading];
+    if (nextKey) {
+      currentKey = nextKey;
+      return;
+    }
+    const content = line.replace(/^\s*[-*]\s+|^\s*\d+[.)]\s*/, "").trim();
+    if (!currentKey || !content) return;
+    if (Array.isArray(sections[currentKey])) sections[currentKey].push(content);
+    else sections[currentKey] += `${sections[currentKey] ? " " : ""}${content}`;
+  });
+
+  return sections;
+};
+
+const serializeAIResponse = (response) => {
+  const sections = [
+    ["Requirement Understanding", response.requirementUnderstanding],
+    ["Frontend Tasks", response.frontendTasks],
+    ["Backend Tasks", response.backendTasks],
+    ["Database Tasks", response.databaseTasks],
+    ["Testing Steps", response.testingSteps],
+    ["Possible Blockers", response.possibleBlockers],
+    ["Recommended Next Action", response.recommendedNextAction],
+  ];
+
+  return sections
+    .filter(([, content]) => content && (!Array.isArray(content) || content.length))
+    .map(([heading, content]) => {
+      const value = Array.isArray(content)
+        ? content.map((item) => `- ${item}`).join("\n")
+        : content;
+      return `${heading}\n${value}`;
+    })
+    .join("\n\n");
+};
+
+const toInteraction = (interaction) => ({
+  id: interaction.interaction_id,
+  projectId: interaction.project_id,
+  userPrompt: interaction.prompt,
+  aiTaskType: interaction.task_type,
+  response: parseAIResponse(interaction.ai_response),
+  modelName: interaction.model_name,
+  createdAt: interaction.created_at,
+});
+
 // Helper to simulate network latency for mock responses.
 const delay = (ms = 300) => new Promise((res) => setTimeout(res, ms));
 
@@ -70,7 +178,7 @@ export async function getProjects() {
     return [...projects];
   }
   const { data } = await apiClient.get("/api/projects");
-  return data;
+  return data.map(toProject);
 }
 
 export async function getProjectById(projectId) {
@@ -79,7 +187,7 @@ export async function getProjectById(projectId) {
     return projects.find((p) => p.id === Number(projectId)) || null;
   }
   const { data } = await apiClient.get(`/api/projects/${projectId}`);
-  return data;
+  return toProject(data);
 }
 
 export async function createProject(projectData) {
@@ -93,8 +201,8 @@ export async function createProject(projectData) {
     projects = [...projects, project];
     return project;
   }
-  const { data } = await apiClient.post("/api/projects", projectData);
-  return data;
+  const { data } = await apiClient.post("/api/projects", toProjectRequest(projectData));
+  return toProject(data);
 }
 
 export async function updateProject(projectId, projectData) {
@@ -105,8 +213,8 @@ export async function updateProject(projectId, projectData) {
     );
     return projects.find((p) => p.id === Number(projectId));
   }
-  const { data } = await apiClient.put(`/api/projects/${projectId}`, projectData);
-  return data;
+  const { data } = await apiClient.put(`/api/projects/${projectId}`, toProjectRequest(projectData));
+  return toProject(data);
 }
 
 export async function deleteProject(projectId) {
@@ -129,7 +237,7 @@ export async function getTasks() {
     return [...tasks];
   }
   const { data } = await apiClient.get("/api/tasks");
-  return data;
+  return data.map(toTask);
 }
 
 export async function createTask(taskData) {
@@ -144,8 +252,8 @@ export async function createTask(taskData) {
     tasks = [...tasks, task];
     return task;
   }
-  const { data } = await apiClient.post("/api/tasks", taskData);
-  return data;
+  const { data } = await apiClient.post("/api/tasks", toTaskRequest(taskData));
+  return toTask(data);
 }
 
 export async function updateTask(taskId, taskData) {
@@ -158,8 +266,8 @@ export async function updateTask(taskId, taskData) {
     );
     return tasks.find((t) => t.id === Number(taskId));
   }
-  const { data } = await apiClient.put(`/api/tasks/${taskId}`, taskData);
-  return data;
+  const { data } = await apiClient.put(`/api/tasks/${taskId}`, toTaskRequest(taskData));
+  return toTask(data);
 }
 
 export async function updateTaskStatus(taskId, status) {
@@ -173,7 +281,7 @@ export async function updateTaskStatus(taskId, status) {
     return tasks.find((t) => t.id === Number(taskId));
   }
   const { data } = await apiClient.patch(`/api/tasks/${taskId}/status`, { status });
-  return data;
+  return toTask(data);
 }
 
 export async function deleteTask(taskId) {
@@ -194,8 +302,12 @@ export async function generateAIPlan(requestData) {
     await delay(900);
     return buildMockAIResponse(requestData);
   }
-  const { data } = await apiClient.post("/api/ai/plan", requestData);
-  return data;
+  const { data } = await apiClient.post("/api/ai/plan", {
+    project_id: Number(requestData.projectId),
+    task_type: requestData.aiTaskType,
+    prompt: requestData.requirement,
+  });
+  return parseAIResponse(data.ai_response);
 }
 
 export async function getAIHistory(projectId) {
@@ -210,7 +322,7 @@ export async function getAIHistory(projectId) {
     ? `/api/ai/history/${projectId}`
     : "/api/ai/history";
   const { data } = await apiClient.get(url);
-  return data;
+  return data.map(toInteraction);
 }
 
 export async function deleteAIInteraction(interactionId) {
@@ -235,8 +347,14 @@ export async function saveAIInteraction(interaction) {
     interactions = [record, ...interactions];
     return record;
   }
-  const { data } = await apiClient.post("/api/ai/history", interaction);
-  return data;
+  const { data } = await apiClient.post("/api/ai/history", {
+    project_id: Number(interaction.projectId),
+    task_type: interaction.aiTaskType,
+    prompt: interaction.userPrompt,
+    ai_response: serializeAIResponse(interaction.response),
+    model_name: interaction.modelName || "GPT-OSS",
+  });
+  return toInteraction(data);
 }
 
 // ---------------------------------------------------------------------------

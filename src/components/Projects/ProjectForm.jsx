@@ -8,9 +8,17 @@ export default function ProjectForm({ initial, onSave, onCancel }) {
 
   function validate() {
     const e = {};
-    if (!name.trim()) e.name = "Project name is required.";
-    if (!description.trim()) e.description = "Description is required.";
-    if (!techStack.trim()) e.techStack = "Technology stack is required.";
+    const trimmedName = name.trim();
+    const trimmedDescription = description.trim();
+    const trimmedTechStack = techStack.trim();
+    if (!trimmedName) e.name = "Project name is required.";
+    else if (trimmedName.length < 2) e.name = "Project name must be at least 2 characters.";
+    else if (trimmedName.length > 150) e.name = "Project name must be 150 characters or fewer.";
+    if (!trimmedDescription) e.description = "Description is required.";
+    else if (trimmedDescription.length < 5) e.description = "Description must be at least 5 characters.";
+    if (!trimmedTechStack) e.techStack = "Technology stack is required.";
+    else if (trimmedTechStack.length < 2) e.techStack = "Technology stack must be at least 2 characters.";
+    else if (trimmedTechStack.length > 300) e.techStack = "Technology stack must be 300 characters or fewer.";
     setErrors(e);
     return Object.keys(e).length === 0;
   }
