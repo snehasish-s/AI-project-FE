@@ -68,25 +68,34 @@ const parseAIResponse = (answer) => {
     recommendedNextAction: "",
   };
   const sectionMap = {
-    "Requirement Understanding": "requirementUnderstanding",
-    "Frontend Tasks": "frontendTasks",
-    "Backend Tasks": "backendTasks",
-    "Database Tasks": "databaseTasks",
-    "Testing Steps": "testingSteps",
-    "Possible Blockers": "possibleBlockers",
-    "Recommended Next Action": "recommendedNextAction",
+    "requirement understanding": "requirementUnderstanding",
+    "frontend tasks": "frontendTasks",
+    "backend tasks": "backendTasks",
+    "database tasks": "databaseTasks",
+    "testing steps": "testingSteps",
+    "possible blockers": "possibleBlockers",
+    "recommended next action": "recommendedNextAction",
   };
   let currentKey = null;
 
   String(answer || "").split("\n").forEach((line) => {
-    const heading = line.replace(/^\s*\d+\.\s*/, "").trim();
+    const heading = line
+      .replace(/^\s*#+\s*/, "")
+      .replace(/^\s*\**\s*\d+[.)]?\s*/, "")
+      .replace(/\s*\**\s*:?\s*$/, "")
+      .trim()
+      .toLowerCase();
     const nextKey = sectionMap[heading];
     if (nextKey) {
       currentKey = nextKey;
       return;
     }
     const content = line.replace(/^\s*[-*]\s+|^\s*\d+[.)]\s*/, "").trim();
-    if (!currentKey || !content) return;
+    if (!content) return;
+    if (!currentKey) {
+      sections.requirementUnderstanding += `${sections.requirementUnderstanding ? " " : ""}${content}`;
+      return;
+    }
     if (Array.isArray(sections[currentKey])) sections[currentKey].push(content);
     else sections[currentKey] += `${sections[currentKey] ? " " : ""}${content}`;
   });
